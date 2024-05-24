@@ -1,5 +1,5 @@
 ---
-output: reprex::reprex_document
+output: html_document
 knit: reprex::reprex_render
 ---
 
@@ -8,7 +8,159 @@ Describe your issue very briefly here. Then show it with a minimal, self-contain
 xd
 
 ```{r}
+install.packages("randomForest")
+install.packages("pdp")
 
+library(randomForest)
+library(pdp)
+library(caret)
+
+```
+
+```{r}
+day <- read.csv("Practica 5 Sin sol/day.csv")
+
+# Use one-hot encoding for season
+day$season <- as.factor(day$season)
+one_hot_encoded <- dummyVars(" ~ season", data = day)
+new_season <- predict(one_hot_encoded, newdata = day)
+day <- cbind(day, new_season)
+
+# Create feature MISTY
+MISTY <- as.data.frame(ifelse(day$weathersit == 2, 1, 0))
+colnames(MISTY) <- "MISTY"
+day <- cbind(day, MISTY)
+
+# Create feature RAIN
+RAIN <- as.data.frame(ifelse(day$weathersit == 3 | day$weathersit == 4, 1, 0))
+colnames(RAIN) <- "RAIN"
+day <- cbind(day, RAIN)
+
+# Denormalize temp
+# temp: Normalized temperature in Celsius. The values are derived via
+# (t-t_min)/(t_max-t_min), t_min=-8, t_max=+39 (only in hourly scale)
+t_min = -8
+t_max = +39
+new_temp <- day$temp * (t_max-t_min) + t_min
+day <- cbind(day, new_temp)
+
+# Denormalize hum
+# hum: Normalized humidity. The values are divided to 100 (max)
+new_hum <- day$hum * 100
+day <- cbind(day, new_hum)
+
+# Denormalize windspeed
+# windspeed: Normalized wind speed. The values are divided to 67 (max)
+new_windspeed <- day$windspeed * 67
+day <- cbind(day, new_windspeed)
+
+# Create feature days_since_2011
+days_since_2011 <- difftime(as.Date(day$dteday), as.Date("2011-01-01"), units = "days")
+days_since_2011 <- as.data.frame(as.numeric(days_since_2011))
+colnames(days_since_2011) <- "days_since_2011"
+day <- cbind(day, days_since_2011)
+
+# Select features that will be used in the linear model
+# Only select 3 features for season to avoid correlation (season.1 as reference)
+day <- subset(day, select = c(workingday, holiday, season.2, season.3, season.4, MISTY, 
+                                RAIN, new_temp, new_hum, new_windspeed, days_since_2011, cnt))
+
+# Rename features
+# season (1:winter, 2:spring, 3:summer, 4:fall)
+colnames(day)[3] <- "spring"
+colnames(day)[4] <- "summer"
+colnames(day)[5] <- "fall"
+colnames(day)[8] <- "temp"
+colnames(day)[9] <- "hum"
+colnames(day)[10] <- "windspeed"
+
+```
+
+```{r}
+
+# Ajustar el modelo de Random Forest
+set.seed(250)
+rf_model <- randomForest(cnt ~ ., data = day, importance = TRUE)
+
+# Generar Partial Dependence Plots para todas las variables
+variables <- names(day)
+variables <- variables[variables != "cnt"] 
+
+for (var in variables) {
+    partial_obj <- partial(rf_model, pred.var = var, prob = TRUE, chull = TRUE, progress = TRUE, plot = TRUE, rug = TRUE, 
+                         plot.engine = "ggplot2",  plot_args = list(geom = c("line", "density"))) + xlab(var) + 
+                         ylab("Predicted number of bike rentals")
+    print(partial_obj)}
+
+```
+# Excercise 2
+
+```{r}
+
+library(ggplot2)
+library(dplyr)
+
+set.seed(128)
+sample <- day %>% sample_frac(0.1)
+
+X <- sample %>% select(hum, temp)
+y <- sample$cnt
+
+# Training the Random Forest model
+set.seed(128)
+model <- randomForest(X, y, ntree=100)
+# Generating the 2D Partial Dependency Plot
+pdp <- partial(model, pred.var = c("hum", "temp"), train = day, grid.resolution = 20)
+
+pdp_df <- as.data.frame(pdp)
+
+ggplot() +
+  geom_tile(data = pdp_df, aes(x = temp, y = hum, fill = yhat), width = 5, height = 10) +
+  geom_rug(data = day, aes(x = temp), sides = "b") +
+  geom_rug(data = day, aes(y = hum), sides = "l") + 
+  theme_minimal() +
+  labs(title = "Bidimensional Partial Dependency Plot", 
+       x = "Temperature",
+       y = "Humidity", 
+       fill = "Predicted Bike Rentals Count")
+
+```
+# Excersice 3:
+
+
+```{r}
+
+house_data <- read.csv("Practica 5 Sin sol/kc_house_data.csv")
+
+set.seed(42)
+sampled_data <- house_data %>% sample_frac(0.2)
+
+sampled_data <- sampled_data %>% 
+  filter(complete.cases(bedrooms, bathrooms, sqft_living, sqft_lot, floors, yr_built))
+
+```
+
+
+```{r}
+
+set.seed(250)
+rf_model_house <- randomForest(price ~ bedrooms + bathrooms + sqft_living + sqft_lot + floors + yr_built,
+                               data = sampled_data, importance = TRUE, na.action = na.omit)
+
+features_to_plot <- c("bedrooms", "bathrooms", "sqft_living", "floors")
+
+# Using a loop to create a PDP for each feature
+plots <- lapply(features_to_plot, function(feature) {
+  pd <- partial(rf_model_house, pred.var = feature, grid.resolution = 20)
+  pd_plot <- ggplot(pd, aes_string(x = feature, y = "yhat")) +
+    geom_line() +
+    labs(title = paste("PDP for", feature), y = "Predicted House Price") +
+    theme_minimal()
+  return(pd_plot)
+})
+
+# Print all plots
+print(plots)
 
 
 ```
