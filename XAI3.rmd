@@ -3,9 +3,8 @@ output: html_document
 knit: reprex::reprex_render
 ---
 
-Describe your issue very briefly here. Then show it with a minimal, self-contained example in the following R chunk.
-
-xd
+##XAI3
+###Evgeny Grachev
 
 ```{r}
 install.packages("randomForest")
@@ -78,11 +77,11 @@ colnames(day)[10] <- "windspeed"
 
 ```{r}
 
-# Ajustar el modelo de Random Forest
-set.seed(250)
+# Random Forest
+set.seed(100)
 rf_model <- randomForest(cnt ~ ., data = day, importance = TRUE)
 
-# Generar Partial Dependence Plots para todas las variables
+# Partial Dependence Plots 
 variables <- names(day)
 variables <- variables[variables != "cnt"] 
 
@@ -100,13 +99,13 @@ for (var in variables) {
 library(ggplot2)
 library(dplyr)
 
-set.seed(128)
+set.seed(101)
 sample <- day %>% sample_frac(0.1)
 
 X <- sample %>% select(hum, temp)
 y <- sample$cnt
 
-# Training the Random Forest model
+#Random Forest model
 set.seed(128)
 model <- randomForest(X, y, ntree=100)
 # Generating the 2D Partial Dependency Plot
@@ -132,7 +131,7 @@ ggplot() +
 
 house_data <- read.csv("Practica 5 Sin sol/kc_house_data.csv")
 
-set.seed(42)
+set.seed(102)
 sampled_data <- house_data %>% sample_frac(0.2)
 
 sampled_data <- sampled_data %>% 
@@ -143,13 +142,13 @@ sampled_data <- sampled_data %>%
 
 ```{r}
 
-set.seed(250)
+set.seed(102)
 rf_model_house <- randomForest(price ~ bedrooms + bathrooms + sqft_living + sqft_lot + floors + yr_built,
                                data = sampled_data, importance = TRUE, na.action = na.omit)
 
 features_to_plot <- c("bedrooms", "bathrooms", "sqft_living", "floors")
 
-# Using a loop to create a PDP for each feature
+# Use a loop to create PDP for each feature
 plots <- lapply(features_to_plot, function(feature) {
   pd <- partial(rf_model_house, pred.var = feature, grid.resolution = 20)
   pd_plot <- ggplot(pd, aes_string(x = feature, y = "yhat")) +
